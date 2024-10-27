@@ -16,6 +16,8 @@ struct Buf {
 const S_H : usize = 80;
 const S_W : usize = 120;
 const MAX_L: f32 = 45.0; 
+const MAX_H: f32 = 30.0; 
+const MAX_Z: f32 = 20.0; 
 const V : f32 = 0.5;
 type BufferT = [[Buf; S_W]; S_H];
 
@@ -76,7 +78,9 @@ struct Cube {
     x :f32,
     y :f32,
     z :f32,
-    v :f32,
+    v_x :f32,
+    v_y :f32,
+    v_z :f32,
     a_x :f32,
     a_y :f32,
     a_z :f32,
@@ -88,7 +92,7 @@ struct Cube {
 
 impl Cube {
 
-fn new(l :usize, x :f32, y :f32, z :f32, v :f32, a_x :f32, a_y :f32, a_z :f32,  alpha_x :f32, alpha_y :f32, alpha_z :f32) -> Self {
+fn new(l :usize, x :f32, y :f32, z :f32, v_x :f32, v_y : f32, v_z :f32, a_x :f32, a_y :f32, a_z :f32,  alpha_x :f32, alpha_y :f32, alpha_z :f32) -> Self {
     //let Faces :[char; 6] = ['.', '$', '^', '~', '#', '!'];
 
     let mut res : Vec<Point> = Vec::new();
@@ -134,7 +138,9 @@ fn new(l :usize, x :f32, y :f32, z :f32, v :f32, a_x :f32, a_y :f32, a_z :f32,  
         x,
         y,
         z,
-        v,
+        v_x,
+        v_y,
+        v_z,
         a_x,
         a_y,
         a_z,
@@ -150,10 +156,20 @@ fn tick(&mut self) {
         self.a_x = self.a_x + self.alpha_x;
         self.a_y = self.a_y + self.alpha_y;
         self.a_z = self.a_z + self.alpha_z;
-        if (self.x + 3.0 * self.v).abs() > MAX_L { 
-            self.v = -self.v;
+        if (self.x + 3.0 * self.v_x).abs() > MAX_L { 
+            self.v_x = -self.v_x;
         } else {
-            self.x = self.x + self.v;
+            self.x = self.x + self.v_x;
+        }
+        if (self.y + 3.0 * self.v_y).abs() > MAX_H { 
+            self.v_y = -self.v_y;
+        } else {
+            self.y = self.y + self.v_y;
+        }
+        if (self.z + 3.0 * self.v_z).abs() > MAX_H { 
+            self.v_z = -self.v_z;
+        } else {
+            self.z = self.z + self.v_z;
         }
 }
 
@@ -163,17 +179,27 @@ fn roto_transl(&self) -> Vec<Point> {
     let c_z = rotate_z(&c_x, self.a_z);
     let r = rotate_y(&c_z, self.a_y);
     let t = translate(&r, self.x, self.y, self.z);
-    return t;
+    // TODO: since we don't have a view matrix we just translate 
+    // the cubes way back in world coordinates
+    let f = translate(&t, 0.0, 0.0, -40.0);
+    return f;
 }
 }
 
 fn display(points : &mut Vec<Point>) {
     let mut buf : BufferT = [[ Buf {c: ' ', z: 0.0}; S_W]; S_H];
 
-    points.sort_by(|p1, p2| p1.partial_cmp(p2).unwrap());
-    for p in points {
+    // TODO: since we don't have a projection matrix we just divide x and y
+    // by a factor * z to simulate perspective
+    let mut projected_points : Vec<Point> = points.iter().map(|p| {
+        let f = p.z * 0.05;
+        Point {x:p.x/f, y:p.y/f, z:p.z, c:p.c}
+    }).collect();
+    projected_points.sort_by(|p1, p2| p1.partial_cmp(p2).unwrap());
+    for p in projected_points {
         let x = (p.x + S_W as f32 / 2.0) as usize;
         let y = (-p.y  + S_H as f32 / 2.0) as usize;
+        if (x >= S_W || y >= S_H) { continue; }
         let c = buf[y][x].c;
         let z = buf[y][x].z;
         buf[y][x].c = if c == ' ' { p.c } else { if p.z > z { p.c } else {c} };
@@ -196,9 +222,9 @@ fn display(points : &mut Vec<Point>) {
 
 fn main() {
     let mut cubes = Vec::new();
-    let c1 = Cube::new(10, 0.0, 0.0, 0.0, V+0.3, 0.0, 0.0, 2.8, 0.2, 0.0, -0.1);
-    let c2= Cube::new(8, 10.0, -15.0, 0.0, V+0.4, 0.0, 0.0, -2.8, 0.0, 0.1, 0.1);
-    let c3= Cube::new(9, 10.0, -30.0, 0.0, V+0.2, 0.0, 0.0, -2.8, 0.1, 0.1, 0.0);
+    let c1 = Cube::new(10, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 2.8, 0.2, 0.0, -0.1);
+    let c2= Cube::new(8, 10.0, -15.0, 0.0, V+0.4, 0.0, 0.0, 0.0, 0.0, -2.8, 0.0, 0.1, 0.1);
+    let c3= Cube::new(9, 10.0, -30.0, 0.0, V+0.2, 0.0, 0.0, 0.0, 0.0, -2.8, 0.1, 0.1, 0.0);
     cubes.push(c1);
     cubes.push(c2);
     cubes.push(c3);
