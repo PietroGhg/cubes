@@ -1,3 +1,4 @@
+use rand::Rng;
 #[derive(PartialEq, PartialOrd, Debug)]
 struct Point {
     z :f32,
@@ -14,11 +15,11 @@ struct Buf {
 
 
 const S_H : usize = 80;
-const S_W : usize = 120;
-const MAX_L: f32 = 45.0; 
+const S_W : usize = 150;
+const MAX_L: f32 = 80.0; 
 const MAX_H: f32 = 30.0; 
 const MAX_Z: f32 = 20.0; 
-const V : f32 = 0.5;
+const V : f32 = 2.0;
 type BufferT = [[Buf; S_W]; S_H];
 
 
@@ -166,7 +167,7 @@ fn tick(&mut self) {
         } else {
             self.y = self.y + self.v_y;
         }
-        if (self.z + 3.0 * self.v_z).abs() > MAX_H { 
+        if (self.z + 3.0 * self.v_z).abs() > MAX_Z { 
             self.v_z = -self.v_z;
         } else {
             self.z = self.z + self.v_z;
@@ -199,7 +200,7 @@ fn display(points : &mut Vec<Point>) {
     for p in projected_points {
         let x = (p.x + S_W as f32 / 2.0) as usize;
         let y = (-p.y  + S_H as f32 / 2.0) as usize;
-        if (x >= S_W || y >= S_H) { continue; }
+        if x >= S_W || y >= S_H { continue; }
         let c = buf[y][x].c;
         let z = buf[y][x].z;
         buf[y][x].c = if c == ' ' { p.c } else { if p.z > z { p.c } else {c} };
@@ -222,12 +223,18 @@ fn display(points : &mut Vec<Point>) {
 
 fn main() {
     let mut cubes = Vec::new();
-    let c1 = Cube::new(10, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 2.8, 0.2, 0.0, -0.1);
-    let c2= Cube::new(8, 10.0, -15.0, 0.0, V+0.4, 0.0, 0.0, 0.0, 0.0, -2.8, 0.0, 0.1, 0.1);
-    let c3= Cube::new(9, 10.0, -30.0, 0.0, V+0.2, 0.0, 0.0, 0.0, 0.0, -2.8, 0.1, 0.1, 0.0);
-    cubes.push(c1);
-    cubes.push(c2);
-    cubes.push(c3);
+    let mut rng = rand::thread_rng();
+    let args : Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("Usage: cubes n");
+    }
+    let ncubes = str::parse::<usize>(&args[1]).expect("n arg must be an unsigned int");
+    for i in 0..ncubes {
+        let v_x: f32 = rng.gen::<f32>() * V;
+        let v_y: f32 = rng.gen::<f32>() * V;
+        let v_z: f32 = rng.gen::<f32>() * V;
+        cubes.push(Cube::new(i + 5, i as f32, 0.0, 0.0, v_x, v_y, v_z, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1));
+    }
     loop {
         print!("{}[2J", 27 as char);
         let mut pts = cubes.iter().flat_map(|c| c.roto_transl()).collect();
