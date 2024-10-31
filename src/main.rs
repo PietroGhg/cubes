@@ -25,14 +25,14 @@ const V : f32 = 2.0;
 const A : f32 = 0.5;
 
 // colors
-const NEUTR : &'static str  = "\x1b[0m";
-const _GREY : &'static str = "\x1b[90m";
-const RED : &'static str = "\x1b[91m";
-const GREEN : &'static str = "\x1b[92m";
-const YELLOW : &'static str = "\x1b[93m";
-const BLUE : &'static str = "\x1b[94m";
-const PURPLE : &'static str = "\x1b[95m";
-const CYAN : &'static str = "\x1b[96m";
+const NEUTR : &str  = "\x1b[0m";
+const _GREY : &str = "\x1b[90m";
+const RED : &str = "\x1b[91m";
+const GREEN : &str = "\x1b[92m";
+const YELLOW : &str = "\x1b[93m";
+const BLUE : &str = "\x1b[94m";
+const PURPLE : &str = "\x1b[95m";
+const CYAN : &str = "\x1b[96m";
 
 type BufferT = [[Buf; S_W]; S_H];
 
@@ -47,7 +47,7 @@ fn rotate_point_x(p : &Point, a :f32) -> Point {
     }
 }
 
-fn rotate_x(points :&Vec<Point>, a :f32) -> Vec<Point> {
+fn rotate_x(points :&[Point], a :f32) -> Vec<Point> {
     points.iter().map(|x| rotate_point_x(x,a)).collect()
 }
 
@@ -61,7 +61,7 @@ fn rotate_point_y(p : &Point, a :f32) -> Point {
     }
 }
 
-fn rotate_y(points :&Vec<Point>, a :f32) -> Vec<Point> {
+fn rotate_y(points :&[Point], a :f32) -> Vec<Point> {
     points.iter().map(|x| rotate_point_y(x,a)).collect()
 }
 
@@ -75,7 +75,7 @@ fn rotate_point_z(p : &Point, a :f32) -> Point {
     }
 }
 
-fn rotate_z(points :&Vec<Point>, a :f32) -> Vec<Point> {
+fn rotate_z(points :&[Point], a :f32) -> Vec<Point> {
     points.iter().map(|x| rotate_point_z(x,a)).collect()
 }
 
@@ -89,7 +89,7 @@ fn translate_point_x(p: &Point, x :f32, y :f32, z :f32) -> Point {
     }
 }
 
-fn translate(points : &Vec<Point>, x : f32, y :f32, z :f32) -> Vec<Point> {
+fn translate(points : &[Point], x : f32, y :f32, z :f32) -> Vec<Point> {
     points.iter().map(|p| translate_point_x(p,x,y,z)).collect()
 }
 
@@ -144,13 +144,13 @@ fn new_colors(colors : [&'static str ; 6], l :usize, x :f32, y :f32, z :f32, v_x
     // top side
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : j as f32 , y : l as f32 / 2.0 as f32 , z : i as f32, c : '#', color : colors[4]});
+            res.push(Point{ x : j as f32 , y : l as f32 / 2.0, z : i as f32, c : '#', color : colors[4]});
         }
     }
     // bottom side
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : j as f32 , y : -(l as f32) / 2.0 as f32 , z : i as f32, c : '!', color : colors[5]});
+            res.push(Point{ x : j as f32 , y : -(l as f32) / 2.0, z : i as f32, c : '!', color : colors[5]});
         }
     }
     Cube {
@@ -177,23 +177,23 @@ fn new(color : &'static str , l :usize, x :f32, y :f32, z :f32, v_x :f32, v_y : 
 }
 
 fn tick(&mut self) {
-        self.a_x = self.a_x + self.alpha_x;
-        self.a_y = self.a_y + self.alpha_y;
-        self.a_z = self.a_z + self.alpha_z;
+        self.a_x += self.alpha_x;
+        self.a_y += self.alpha_y;
+        self.a_z += self.alpha_z;
         if (self.x + 3.0 * self.v_x).abs() > MAX_L { 
             self.v_x = -self.v_x;
         } else {
-            self.x = self.x + self.v_x;
+            self.x += self.v_x;
         }
         if (self.y + 3.0 * self.v_y).abs() > MAX_H { 
             self.v_y = -self.v_y;
         } else {
-            self.y = self.y + self.v_y;
+            self.y += self.v_y;
         }
         if (self.z + 3.0 * self.v_z).abs() > MAX_Z { 
             self.v_z = -self.v_z;
         } else {
-            self.z = self.z + self.v_z;
+            self.z += self.v_z;
         }
 }
 
@@ -205,12 +205,11 @@ fn roto_transl(&self) -> Vec<Point> {
     let t = translate(&r, self.x, self.y, self.z);
     // TODO: since we don't have a view matrix we just translate 
     // the cubes way back in world coordinates
-    let f = translate(&t, 0.0, 0.0, -50.0);
-    return f;
+    translate(&t, 0.0, 0.0, -50.0)
 }
 }
 
-fn display(points : &mut Vec<Point>, with_color : bool) {
+fn display(points : &mut [Point], with_color : bool) {
     let mut buf : BufferT = [[ Buf {c: ' ', color: NEUTR, z: 0.0}; S_W]; S_H];
 
     // TODO: since we don't have a projection matrix we just divide x and y
@@ -227,9 +226,9 @@ fn display(points : &mut Vec<Point>, with_color : bool) {
         let c = buf[y][x].c;
         let color = buf[y][x].color;
         let z = buf[y][x].z;
-        buf[y][x].c = if c == ' ' { p.c } else { if p.z > z { p.c } else {c} };
-        buf[y][x].color = if c == ' ' { p.color } else { if p.z > z { p.color } else { color } };
-        buf[y][x].z = if c == ' ' { p.z } else { if p.z > z { p.z } else {z} };
+        buf[y][x].c = if c == ' ' || p.z > z { p.c } else {c};
+        buf[y][x].color = if c == ' ' || p.z > z { p.color } else { color };
+        buf[y][x].z = if c == ' ' || p.z > z { p.z } else {z};
     }
     let mut s :String = String::from("");
 
@@ -271,7 +270,7 @@ fn main() {
     }
     loop {
         print!("{}[2J", 27 as char);
-        let mut pts = cubes.iter().flat_map(|c| c.roto_transl()).collect();
+        let mut pts : Vec<Point> = cubes.iter().flat_map(|c| c.roto_transl()).collect();
         display(&mut pts, true);
         for c in cubes.iter_mut() {
             c.tick();
