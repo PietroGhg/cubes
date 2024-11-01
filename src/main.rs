@@ -1,3 +1,4 @@
+use std::time::Instant;
 use rand::Rng;
 
 #[derive(PartialEq, PartialOrd, Debug)]
@@ -5,7 +6,6 @@ struct Vec3 {
     z :f32,
     x :f32,
     y :f32,
-
 }
 
 #[derive(PartialEq, PartialOrd, Debug)]
@@ -28,8 +28,8 @@ const S_W : usize = 150;
 const MAX_L: f32 = 80.0; 
 const MAX_H: f32 = 30.0; 
 const MAX_Z: f32 = 20.0; 
-const V : f32 = 2.0;
-const A : f32 = 0.5;
+const V : f32 = 0.08; // units of space / milliseconds
+const A : f32 = 0.02; // rad / milliseconds
 
 // colors
 const NEUTR : &str  = "\x1b[0m";
@@ -108,11 +108,13 @@ fn translate(points : &[Point], x : f32, y :f32, z :f32) -> Vec<Point> {
     points.iter().map(|p| translate_point_x(p,x,y,z)).collect()
 }
 
+
 struct Cube {
     pos : Vec3,
     v : Vec3,
     a : Vec3,
     alpha : Vec3,
+    time : Instant,
     points :Vec<Point>,
 }
 
@@ -165,6 +167,7 @@ fn new_colors(colors : [&'static str ; 6], l :usize, pos : Vec3, v : Vec3, a : V
         v,
         a,
         alpha,
+        time : Instant::now(),
         points: res,
     }
 
@@ -176,28 +179,30 @@ fn new(color : &'static str , l :usize, pos : Vec3, v : Vec3, a : Vec3,  alpha :
 }
 
 fn tick(&mut self) {
-        self.a.x += self.alpha.x;
-        self.a.y += self.alpha.y;
-        self.a.z += self.alpha.z;
-        if (self.pos.x + 3.0 * self.v.x).abs() > MAX_L { 
+    let now = Instant::now();
+    let delta_t = now.duration_since(self.time).as_millis() as f32;
+    self.time = now;
+        self.a.x += self.alpha.x * delta_t;
+        self.a.y += self.alpha.y * delta_t;
+        self.a.z += self.alpha.z * delta_t;
+        if (self.pos.x + self.v.x * delta_t).abs() > MAX_L { 
             self.v.x = -self.v.x;
         } else {
-            self.pos.x += self.v.x;
+            self.pos.x += self.v.x * delta_t;
         }
-        if (self.pos.y + 3.0 * self.v.y).abs() > MAX_H { 
+        if (self.pos.y + self.v.y * delta_t).abs() > MAX_H { 
             self.v.y = -self.v.y;
         } else {
-            self.pos.y += self.v.y;
+            self.pos.y += self.v.y * delta_t;
         }
-        if (self.pos.z + 3.0 * self.v.z).abs() > MAX_Z { 
+        if (self.pos.z + self.v.z * delta_t).abs() > MAX_Z { 
             self.v.z = -self.v.z;
         } else {
-            self.pos.z += self.v.z;
+            self.pos.z += self.v.z * delta_t;
         }
 }
 
 fn roto_transl(&self) -> Vec<Point> {
-    // TODO use time
     let c_x = rotate_x(&self.points, self.a.x);
     let c_z = rotate_z(&c_x, self.a.z);
     let r = rotate_y(&c_z, self.a.y);
