@@ -312,9 +312,9 @@ fn display(points: &mut [Point], with_color: bool) {
 
     for i in 0..S_H {
         for j in 0..S_W {
-            let b = &buf[i as usize][j as usize];
+            let b = &buf[i][j];
             s += if with_color { b.color } else { "" };
-            s.push(buf[i as usize][j as usize].c);
+            s.push(buf[i][j].c);
             s += if with_color { NEUTR } else { "" };
         }
         s.push('\n');
