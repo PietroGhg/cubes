@@ -1,9 +1,16 @@
 use rand::Rng;
+
 #[derive(PartialEq, PartialOrd, Debug)]
-struct Point {
+struct Vec3 {
     z :f32,
     x :f32,
     y :f32,
+
+}
+
+#[derive(PartialEq, PartialOrd, Debug)]
+struct Point {
+    pos : Vec3,
     c :char,
     color : &'static str,
 }
@@ -39,9 +46,11 @@ type BufferT = [[Buf; S_W]; S_H];
 
 fn rotate_point_x(p : &Point, a :f32) -> Point {
     Point {
-        x : p.x,
-        y: p.y * f32::cos(a) - p.z * f32::sin(a),
-        z : p.y * f32::sin(a) + p.z * f32::cos(a),
+        pos : Vec3 {
+        x : p.pos.x,
+        y: p.pos.y * f32::cos(a) - p.pos.z * f32::sin(a),
+        z : p.pos.y * f32::sin(a) + p.pos.z * f32::cos(a),
+        },
         c : p.c,
         color : p.color,
     }
@@ -53,9 +62,11 @@ fn rotate_x(points :&[Point], a :f32) -> Vec<Point> {
 
 fn rotate_point_y(p : &Point, a :f32) -> Point {
     Point {
-        x : p.x * f32::cos(a) + p.z * f32::sin(a), 
-        y: p.y,
-        z : p.z * f32::cos(a) - p.x * f32::sin(a),
+        pos : Vec3 {
+        x : p.pos.x * f32::cos(a) + p.pos.z * f32::sin(a), 
+        y: p.pos.y,
+        z : p.pos.z * f32::cos(a) - p.pos.x * f32::sin(a),
+        },
         c : p.c,
         color : p.color,
     }
@@ -67,9 +78,11 @@ fn rotate_y(points :&[Point], a :f32) -> Vec<Point> {
 
 fn rotate_point_z(p : &Point, a :f32) -> Point {
     Point {
-        x : p.x * f32::cos(a) - p.y * f32::sin(a), 
-        y: p.x * f32::sin(a) + p.y * f32::cos(a) ,
-        z : p.z, 
+        pos : Vec3 {
+        x : p.pos.x * f32::cos(a) - p.pos.y * f32::sin(a), 
+        y: p.pos.x * f32::sin(a) + p.pos.y * f32::cos(a) ,
+        z : p.pos.z, 
+        },
         c : p.c,
         color : p.color,
     }
@@ -81,9 +94,11 @@ fn rotate_z(points :&[Point], a :f32) -> Vec<Point> {
 
 fn translate_point_x(p: &Point, x :f32, y :f32, z :f32) -> Point {
     Point {
-        x : p.x + x,
-        y : p.y + y,
-        z : p.z + z,
+        pos : Vec3 {
+        x : p.pos.x + x,
+        y : p.pos.y + y,
+        z : p.pos.z + z,
+        },
         c : p.c,
         color : p.color,
     }
@@ -94,24 +109,16 @@ fn translate(points : &[Point], x : f32, y :f32, z :f32) -> Vec<Point> {
 }
 
 struct Cube {
-    x :f32,
-    y :f32,
-    z :f32,
-    v_x :f32,
-    v_y :f32,
-    v_z :f32,
-    a_x :f32,
-    a_y :f32,
-    a_z :f32,
-    alpha_x :f32,
-    alpha_y :f32,
-    alpha_z :f32,
+    pos : Vec3,
+    v : Vec3,
+    a : Vec3,
+    alpha : Vec3,
     points :Vec<Point>,
 }
 
 impl Cube {
 
-fn new_colors(colors : [&'static str ; 6], l :usize, x :f32, y :f32, z :f32, v_x :f32, v_y : f32, v_z :f32, a_x :f32, a_y :f32, a_z :f32,  alpha_x :f32, alpha_y :f32, alpha_z :f32) -> Self {
+fn new_colors(colors : [&'static str ; 6], l :usize, pos : Vec3, v : Vec3, a : Vec3,  alpha : Vec3) -> Self {
     //let Faces :[char; 6] = ['.', '$', '^', '~', '#', '!'];
 
     let mut res : Vec<Point> = Vec::new();
@@ -119,90 +126,82 @@ fn new_colors(colors : [&'static str ; 6], l :usize, x :f32, y :f32, z :f32, v_x
     // front
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : i as f32, y : j as f32 , z : l as f32 / 2.0 , c : '.', color : colors[0]});
+            res.push(Point{ pos : Vec3 {x : i as f32, y : j as f32 , z : l as f32 / 2.0} , c : '.', color : colors[0]});
         }
     }
     // back
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : i as f32, y : j as f32 , z : -(l as f32) / 2.0 , c : '$', color : colors[1]});
+            res.push(Point{ pos : Vec3 { x : i as f32, y : j as f32 , z : -(l as f32) / 2.0 } , c : '$', color : colors[1]});
         }
     }
 
     // right side
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : l as f32 / 2.0 , y : j as f32 , z : i as f32, c : '^', color : colors[2]});
+            res.push(Point{ pos : Vec3 { x : l as f32 / 2.0 , y : j as f32 , z : i as f32 }, c : '^', color : colors[2]});
         }
     }
     // left side
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : -(l as f32) / 2.0 , y : j as f32 , z : i as f32, c : '~', color : colors[3]});
+            res.push(Point{ pos : Vec3 { x : -(l as f32) / 2.0 , y : j as f32 , z : i as f32 }, c : '~', color : colors[3]});
         }
     }
     // top side
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : j as f32 , y : l as f32 / 2.0, z : i as f32, c : '#', color : colors[4]});
+            res.push(Point{ pos : Vec3 { x : j as f32 , y : l as f32 / 2.0, z : i as f32 }, c : '#', color : colors[4]});
         }
     }
     // bottom side
     for i in -(l as i32)/2..(l as i32 /2) {
         for j in -(l as i32)/2..(l as i32 /2) {
-            res.push(Point{ x : j as f32 , y : -(l as f32) / 2.0, z : i as f32, c : '!', color : colors[5]});
+            res.push(Point{ pos : Vec3 { x : j as f32 , y : -(l as f32) / 2.0, z : i as f32 }, c : '!', color : colors[5]});
         }
     }
     Cube {
-        x,
-        y,
-        z,
-        v_x,
-        v_y,
-        v_z,
-        a_x,
-        a_y,
-        a_z,
-        alpha_x,
-        alpha_y,
-        alpha_z,
+        pos,
+        v,
+        a,
+        alpha,
         points: res,
     }
 
 }
 
-fn new(color : &'static str , l :usize, x :f32, y :f32, z :f32, v_x :f32, v_y : f32, v_z :f32, a_x :f32, a_y :f32, a_z :f32,  alpha_x :f32, alpha_y :f32, alpha_z :f32) -> Self {
+fn new(color : &'static str , l :usize, pos : Vec3, v : Vec3, a : Vec3,  alpha : Vec3) -> Self {
     let colors = [color; 6];
-    Cube::new_colors(colors, l, x, y, z, v_x, v_y, v_z, a_x, a_y, a_z, alpha_x, alpha_y, alpha_z)
+    Cube::new_colors(colors, l, pos, v, a, alpha)
 }
 
 fn tick(&mut self) {
-        self.a_x += self.alpha_x;
-        self.a_y += self.alpha_y;
-        self.a_z += self.alpha_z;
-        if (self.x + 3.0 * self.v_x).abs() > MAX_L { 
-            self.v_x = -self.v_x;
+        self.a.x += self.alpha.x;
+        self.a.y += self.alpha.y;
+        self.a.z += self.alpha.z;
+        if (self.pos.x + 3.0 * self.v.x).abs() > MAX_L { 
+            self.v.x = -self.v.x;
         } else {
-            self.x += self.v_x;
+            self.pos.x += self.v.x;
         }
-        if (self.y + 3.0 * self.v_y).abs() > MAX_H { 
-            self.v_y = -self.v_y;
+        if (self.pos.y + 3.0 * self.v.y).abs() > MAX_H { 
+            self.v.y = -self.v.y;
         } else {
-            self.y += self.v_y;
+            self.pos.y += self.v.y;
         }
-        if (self.z + 3.0 * self.v_z).abs() > MAX_Z { 
-            self.v_z = -self.v_z;
+        if (self.pos.z + 3.0 * self.v.z).abs() > MAX_Z { 
+            self.v.z = -self.v.z;
         } else {
-            self.z += self.v_z;
+            self.pos.z += self.v.z;
         }
 }
 
 fn roto_transl(&self) -> Vec<Point> {
     // TODO use time
-    let c_x = rotate_x(&self.points, self.a_x);
-    let c_z = rotate_z(&c_x, self.a_z);
-    let r = rotate_y(&c_z, self.a_y);
-    let t = translate(&r, self.x, self.y, self.z);
+    let c_x = rotate_x(&self.points, self.a.x);
+    let c_z = rotate_z(&c_x, self.a.z);
+    let r = rotate_y(&c_z, self.a.y);
+    let t = translate(&r, self.pos.x, self.pos.y, self.pos.z);
     // TODO: since we don't have a view matrix we just translate 
     // the cubes way back in world coordinates
     translate(&t, 0.0, 0.0, -50.0)
@@ -215,20 +214,20 @@ fn display(points : &mut [Point], with_color : bool) {
     // TODO: since we don't have a projection matrix we just divide x and y
     // by a factor * z to simulate perspective
     let mut projected_points : Vec<Point> = points.iter().map(|p| {
-        let f = p.z * 0.05;
-        Point {x:p.x/f, y:p.y/f, z:p.z, c:p.c, color : p.color}
+        let f = p.pos.z * 0.05;
+        Point { pos : Vec3 { x:p.pos.x/f, y:p.pos.y/f, z:p.pos.z }, c:p.c, color : p.color}
     }).collect();
     projected_points.sort_by(|p1, p2| p1.partial_cmp(p2).unwrap());
     for p in projected_points {
-        let x = (p.x + S_W as f32 / 2.0) as usize;
-        let y = (-p.y  + S_H as f32 / 2.0) as usize;
+        let x = (p.pos.x + S_W as f32 / 2.0) as usize;
+        let y = (-p.pos.y  + S_H as f32 / 2.0) as usize;
         if x >= S_W || y >= S_H { continue; }
         let c = buf[y][x].c;
         let color = buf[y][x].color;
         let z = buf[y][x].z;
-        buf[y][x].c = if c == ' ' || p.z > z { p.c } else {c};
-        buf[y][x].color = if c == ' ' || p.z > z { p.color } else { color };
-        buf[y][x].z = if c == ' ' || p.z > z { p.z } else {z};
+        buf[y][x].c = if c == ' ' || p.pos.z > z { p.c } else {c};
+        buf[y][x].color = if c == ' ' || p.pos.z > z { p.color } else { color };
+        buf[y][x].z = if c == ' ' || p.pos.z > z { p.pos.z } else {z};
     }
     let mut s :String = String::from("");
 
@@ -258,15 +257,19 @@ fn main() {
     let ncubes = str::parse::<usize>(&args[1]).expect("n arg must be an unsigned int");
     let colors = [RED, GREEN, BLUE, YELLOW, CYAN, PURPLE];
     for i in 0..ncubes {
-        let v_x: f32 = rng.gen::<f32>() * V;
-        let v_y: f32 = rng.gen::<f32>() * V;
-        let v_z: f32 = rng.gen::<f32>() * V;
-        let alpha_x: f32 = rng.gen::<f32>() * A;
-        let alpha_y: f32 = rng.gen::<f32>() * A;
-        let alpha_z: f32 = rng.gen::<f32>() * A;
+        let pos = Vec3 { x : i as f32, y : 0.0 , z : 0.0 };
+        let v = Vec3{ x: rng.gen::<f32>() * V,
+         y:  rng.gen::<f32>() * V,
+         z:  rng.gen::<f32>() * V,};
+        let a = Vec3 { x : rng.gen::<f32>(),
+        y: rng.gen::<f32>(),
+        z: rng.gen::<f32>(),};
+        let alpha = Vec3 { x : rng.gen::<f32>() * A,
+        y: rng.gen::<f32>() * A,
+        z: rng.gen::<f32>() * A,};
         let idx : usize = rng.gen_range(0..6);
         let l : usize = rng.gen_range(5..10);
-        cubes.push(Cube::new(colors[idx], l, i as f32, 0.0, 0.0, v_x, v_y, v_z, 0.0, 0.0, 0.0, alpha_x, alpha_y, alpha_z));
+        cubes.push(Cube::new(colors[idx], l, pos, v, a, alpha));
     }
     loop {
         print!("{}[2J", 27 as char);
