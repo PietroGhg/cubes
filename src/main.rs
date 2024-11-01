@@ -310,11 +310,10 @@ fn display(points: &mut [Point], with_color: bool) {
     }
     let mut s: String = String::from("");
 
-    for i in 0..S_H {
-        for j in 0..S_W {
-            let b = &buf[i][j];
+    for row in buf.iter() {
+        for b in row.iter() {
             s += if with_color { b.color } else { "" };
-            s.push(buf[i][j].c);
+            s.push(b.c);
             s += if with_color { NEUTR } else { "" };
         }
         s.push('\n');
