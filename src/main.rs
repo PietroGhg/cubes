@@ -23,11 +23,11 @@ struct Buf {
 }
 
 const S_H: usize = 80;
-const S_W: usize = 150;
-const MAX_L: f32 = 80.0;
-const MAX_H: f32 = 30.0;
+const S_W: usize = 200;
+const MAX_L: f32 = S_W as f32 / 2.0;
+const MAX_H: f32 = S_H as f32 / 2.0;
 const MAX_Z: f32 = 20.0;
-const V: f32 = 0.08; // units of space / milliseconds
+const V: f32 = 0.04; // units of space / milliseconds
 const A: f32 = 0.02; // rad / milliseconds
 
 // colors
@@ -41,6 +41,10 @@ const PURPLE: &str = "\x1b[95m";
 const CYAN: &str = "\x1b[96m";
 
 type BufferT = [[Buf; S_W]; S_H];
+
+fn dist(p1: &Vec3, p2: &Vec3) -> f32 {
+    f32::sqrt(f32::powi(p1.x - p2.x, 2) + f32::powi(p1.y - p2.y, 2) + f32::powi(p1.z - p2.z, 2))
+}
 
 fn rotate_point_x(p: &Point, a: f32) -> Point {
     Point {
@@ -110,6 +114,7 @@ fn translate(points: &[Point], x: f32, y: f32, z: f32) -> Vec<Point> {
 }
 
 struct Cube {
+    l: f32,
     pos: Vec3,
     v: Vec3,
     a: Vec3,
@@ -217,6 +222,7 @@ impl Cube {
             }
         }
         Cube {
+            l: l as f32,
             pos,
             v,
             a,
@@ -231,24 +237,53 @@ impl Cube {
         Cube::new_colors(colors, l, pos, v, a, alpha)
     }
 
-    fn tick(&mut self) {
+    fn will_collide(&self, others: &[Cube]) -> bool {
+        let mut will_collide = false;
+        // TODO we should do the computation in tick(), or have them share the same instant
+        let now = Instant::now();
+        let delta_t = now.duration_since(self.time).as_millis() as f32;
+        for other in others.iter() {
+            if self.pos == other.pos {
+                continue;
+            }
+            let delta = dist(
+                &Vec3 {
+                    x: self.pos.x + self.v.x * delta_t,
+                    y: self.pos.y + self.v.y * delta_t,
+                    z: self.pos.z + self.v.z * delta_t,
+                },
+                &Vec3 {
+                    x: other.pos.x + other.v.x * delta_t,
+                    y: other.pos.y + other.v.y * delta_t,
+                    z: other.pos.z + other.v.z * delta_t,
+                },
+            );
+
+            if delta < self.l * f32::sqrt(2.0) / 2.0 + other.l * f32::sqrt(2.0) / 2.0 {
+                will_collide = true;
+            }
+        }
+        will_collide
+    }
+
+    fn tick(&mut self, will_collide: bool) {
         let now = Instant::now();
         let delta_t = now.duration_since(self.time).as_millis() as f32;
         self.time = now;
         self.a.x += self.alpha.x * delta_t;
         self.a.y += self.alpha.y * delta_t;
         self.a.z += self.alpha.z * delta_t;
-        if (self.pos.x + self.v.x * delta_t).abs() > MAX_L {
+        if (self.pos.x + self.v.x * delta_t).abs() > MAX_L || will_collide {
             self.v.x = -self.v.x;
         } else {
             self.pos.x += self.v.x * delta_t;
         }
-        if (self.pos.y + self.v.y * delta_t).abs() > MAX_H {
+        if (self.pos.y + self.v.y * delta_t).abs() > MAX_H || will_collide {
             self.v.y = -self.v.y;
         } else {
             self.pos.y += self.v.y * delta_t;
         }
-        if (self.pos.z + self.v.z * delta_t).abs() > MAX_Z {
+        if (self.pos.z + self.v.z * delta_t).abs() > MAX_Z || will_collide {
             self.v.z = -self.v.z;
         } else {
             self.pos.z += self.v.z * delta_t;
@@ -331,11 +366,11 @@ fn main() {
     }
     let ncubes = str::parse::<usize>(&args[1]).expect("n arg must be an unsigned int");
     let colors = [RED, GREEN, BLUE, YELLOW, CYAN, PURPLE];
-    for i in 0..ncubes {
+    for _ in 0..ncubes {
         let pos = Vec3 {
-            x: i as f32,
-            y: 0.0,
-            z: 0.0,
+            x: rng.gen::<f32>() * MAX_L,
+            y: rng.gen::<f32>() * MAX_H,
+            z: rng.gen::<f32>() * MAX_Z,
         };
         let v = Vec3 {
             x: rng.gen::<f32>() * V,
@@ -354,15 +389,20 @@ fn main() {
         };
         let idx: usize = rng.gen_range(0..6);
         let l: usize = rng.gen_range(5..10);
-        cubes.push(Cube::new(colors[idx], l, pos, v, a, alpha));
+        let new_cube = Cube::new(colors[idx], l, pos, v, a, alpha);
+        if !new_cube.will_collide(&cubes) {
+            // TODO: try generating another one?
+            cubes.push(new_cube);
+        }
     }
     loop {
         print!("{}[2J", 27 as char);
         let mut pts: Vec<Point> = cubes.iter().flat_map(|c| c.roto_transl()).collect();
         display(&mut pts, true);
-        for c in cubes.iter_mut() {
-            c.tick();
+        let collisions: Vec<bool> = cubes.iter().map(|c| c.will_collide(&cubes)).collect();
+        for (c, will_collide) in std::iter::zip(cubes.iter_mut(), collisions) {
+            c.tick(will_collide);
         }
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
