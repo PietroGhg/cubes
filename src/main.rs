@@ -9,6 +9,14 @@ struct Vec3 {
 }
 
 #[derive(PartialEq, PartialOrd, Debug)]
+struct Vec4 {
+    z: f32,
+    x: f32,
+    y: f32,
+    w: f32,
+}
+
+#[derive(PartialEq, PartialOrd, Debug)]
 struct Point {
     pos: Vec3,
     c: char,
@@ -22,13 +30,60 @@ struct Buf {
     z: f32,
 }
 
+type Mat4 = [[f32; 4]; 4];
+
+fn get_rotate_x_mat4(a: f32) -> Mat4 {
+    [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, f32::cos(a), -f32::sin(a), 0.0],
+        [0.0, f32::sin(a), f32::cos(a), 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+fn get_rotate_y_mat4(a: f32) -> Mat4 {
+    [
+        [f32::cos(a), 0.0, f32::sin(a), 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [-f32::sin(a), 0.0, f32::cos(a), 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+fn get_rotate_z_mat4(a: f32) -> Mat4 {
+    [
+        [f32::cos(a), -f32::sin(a), 0.0, 0.0],
+        [f32::sin(a), f32::cos(a), 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+fn get_trasl_mat4(x: f32, y: f32, z: f32) -> Mat4 {
+    [
+        [1.0, 0.0, 0.0, x],
+        [0.0, 1.0, 0.0, y],
+        [0.0, 0.0, 1.0, z],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+fn mul_mv4(m: &Mat4, v: &Vec4) -> Vec4 {
+    Vec4 {
+        x: m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z + m[0][3] * v.w,
+        y: m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z + m[1][3] * v.w,
+        z: m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z + m[2][3] * v.w,
+        w: m[3][0] * v.x + m[3][1] * v.y + m[3][2] * v.z + m[3][3] * v.w,
+    }
+}
+
 const S_H: usize = 80;
 const S_W: usize = 200;
 const MAX_L: f32 = S_W as f32 / 2.0;
 const MAX_H: f32 = S_H as f32 / 2.0;
 const MAX_Z: f32 = 20.0;
-const V: f32 = 0.04; // units of space / milliseconds
-const A: f32 = 0.02; // rad / milliseconds
+const V: f32 = 0.08; // units of space / milliseconds
+const A: f32 = 0.01; // rad / milliseconds
 
 // colors
 const NEUTR: &str = "\x1b[0m";
@@ -46,12 +101,23 @@ fn dist(p1: &Vec3, p2: &Vec3) -> f32 {
     f32::sqrt(f32::powi(p1.x - p2.x, 2) + f32::powi(p1.y - p2.y, 2) + f32::powi(p1.z - p2.z, 2))
 }
 
+fn to_v4(v: &Vec3) -> Vec4 {
+    Vec4 {
+        x: v.x,
+        y: v.y,
+        z: v.z,
+        w: 1.0,
+    }
+}
+
 fn rotate_point_x(p: &Point, a: f32) -> Point {
+    let m = get_rotate_x_mat4(a);
+    let r = mul_mv4(&m, &to_v4(&p.pos));
     Point {
         pos: Vec3 {
-            x: p.pos.x,
-            y: p.pos.y * f32::cos(a) - p.pos.z * f32::sin(a),
-            z: p.pos.y * f32::sin(a) + p.pos.z * f32::cos(a),
+            x: r.x,
+            y: r.y,
+            z: r.z,
         },
         c: p.c,
         color: p.color,
@@ -63,11 +129,13 @@ fn rotate_x(points: &[Point], a: f32) -> Vec<Point> {
 }
 
 fn rotate_point_y(p: &Point, a: f32) -> Point {
+    let m = get_rotate_y_mat4(a);
+    let r = mul_mv4(&m, &to_v4(&p.pos));
     Point {
         pos: Vec3 {
-            x: p.pos.x * f32::cos(a) + p.pos.z * f32::sin(a),
-            y: p.pos.y,
-            z: p.pos.z * f32::cos(a) - p.pos.x * f32::sin(a),
+            x: r.x,
+            y: r.y,
+            z: r.z,
         },
         c: p.c,
         color: p.color,
@@ -79,11 +147,13 @@ fn rotate_y(points: &[Point], a: f32) -> Vec<Point> {
 }
 
 fn rotate_point_z(p: &Point, a: f32) -> Point {
+    let m = get_rotate_z_mat4(a);
+    let r = mul_mv4(&m, &to_v4(&p.pos));
     Point {
         pos: Vec3 {
-            x: p.pos.x * f32::cos(a) - p.pos.y * f32::sin(a),
-            y: p.pos.x * f32::sin(a) + p.pos.y * f32::cos(a),
-            z: p.pos.z,
+            x: r.x,
+            y: r.y,
+            z: r.z,
         },
         c: p.c,
         color: p.color,
@@ -95,11 +165,13 @@ fn rotate_z(points: &[Point], a: f32) -> Vec<Point> {
 }
 
 fn translate_point_x(p: &Point, x: f32, y: f32, z: f32) -> Point {
+    let m = get_trasl_mat4(x, y, z);
+    let r = mul_mv4(&m, &to_v4(&p.pos));
     Point {
         pos: Vec3 {
-            x: p.pos.x + x,
-            y: p.pos.y + y,
-            z: p.pos.z + z,
+            x: r.x,
+            y: r.y,
+            z: r.z,
         },
         c: p.c,
         color: p.color,
@@ -313,11 +385,12 @@ fn display(points: &mut [Point], with_color: bool) {
     let mut projected_points: Vec<Point> = points
         .iter()
         .map(|p| {
-            let f = p.pos.z * 0.05;
+            let fx = p.pos.z * 0.05;
+            let fy = p.pos.z * 0.04;
             Point {
                 pos: Vec3 {
-                    x: p.pos.x / f,
-                    y: p.pos.y / f,
+                    x: p.pos.x / fx,
+                    y: p.pos.y / fy,
                     z: p.pos.z,
                 },
                 c: p.c,
@@ -403,6 +476,6 @@ fn main() {
         for (c, will_collide) in std::iter::zip(cubes.iter_mut(), collisions) {
             c.tick(will_collide);
         }
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
