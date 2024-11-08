@@ -77,6 +77,46 @@ fn mul_mv4(m: &Mat4, v: &Vec4) -> Vec4 {
     }
 }
 
+fn apply(m: &Mat4, p: &Point) -> Point {
+    let newpos = mul_mv4(m, &to_v4(&p.pos));
+    Point {
+        pos: to_v3(&newpos),
+        c: p.c,
+        color: p.color,
+    }
+}
+
+fn mul_mm4(m1: &Mat4, m2: &Mat4) -> Mat4 {
+    let mut r = [[0.0; 4]; 4];
+    for i in 0..4 {
+        for j in 0..4 {
+            for (k, row2) in m2.iter().enumerate() {
+                r[i][j] += m1[i][k] * row2[j];
+            }
+        }
+    }
+    r
+}
+
+fn get_world_m(a: &Vec3, t: &Vec3) -> Mat4 {
+    let rx = get_rotate_x_mat4(a.x);
+    let ry = get_rotate_y_mat4(a.y);
+    let rz = get_rotate_z_mat4(a.z);
+    let t = get_trasl_mat4(t.x, t.y, t.z);
+
+    // t * rz * ry * rx
+    mul_mm4(&t, &mul_mm4(&rz, &mul_mm4(&ry, &rx)))
+}
+
+fn get_view_matrix(a: &Vec3, t: &Vec3) -> Mat4 {
+    let t = get_trasl_mat4(-t.x, -t.y, -t.z);
+    let rx = get_rotate_x_mat4(-a.x);
+    let ry = get_rotate_y_mat4(-a.y);
+    let rz = get_rotate_z_mat4(-a.z);
+
+    mul_mm4(&rx, &mul_mm4(&ry, &mul_mm4(&rz, &t)))
+}
+
 const S_H: usize = 80;
 const S_W: usize = 200;
 const MAX_L: f32 = S_W as f32 / 2.0;
@@ -84,6 +124,17 @@ const MAX_H: f32 = S_H as f32 / 2.0;
 const MAX_Z: f32 = 20.0;
 const V: f32 = 0.08; // units of space / milliseconds
 const A: f32 = 0.01; // rad / milliseconds
+
+const CAMERA_POS: Vec3 = Vec3 {
+    x: 0.0,
+    y: 0.0,
+    z: 50.0,
+};
+const CAMERA_ANGLE: Vec3 = Vec3 {
+    x: 0.0,
+    y: 0.0,
+    z: 0.0,
+};
 
 // colors
 const NEUTR: &str = "\x1b[0m";
@@ -110,79 +161,12 @@ fn to_v4(v: &Vec3) -> Vec4 {
     }
 }
 
-fn rotate_point_x(p: &Point, a: f32) -> Point {
-    let m = get_rotate_x_mat4(a);
-    let r = mul_mv4(&m, &to_v4(&p.pos));
-    Point {
-        pos: Vec3 {
-            x: r.x,
-            y: r.y,
-            z: r.z,
-        },
-        c: p.c,
-        color: p.color,
+fn to_v3(v: &Vec4) -> Vec3 {
+    Vec3 {
+        x: v.x,
+        y: v.y,
+        z: v.z,
     }
-}
-
-fn rotate_x(points: &[Point], a: f32) -> Vec<Point> {
-    points.iter().map(|x| rotate_point_x(x, a)).collect()
-}
-
-fn rotate_point_y(p: &Point, a: f32) -> Point {
-    let m = get_rotate_y_mat4(a);
-    let r = mul_mv4(&m, &to_v4(&p.pos));
-    Point {
-        pos: Vec3 {
-            x: r.x,
-            y: r.y,
-            z: r.z,
-        },
-        c: p.c,
-        color: p.color,
-    }
-}
-
-fn rotate_y(points: &[Point], a: f32) -> Vec<Point> {
-    points.iter().map(|x| rotate_point_y(x, a)).collect()
-}
-
-fn rotate_point_z(p: &Point, a: f32) -> Point {
-    let m = get_rotate_z_mat4(a);
-    let r = mul_mv4(&m, &to_v4(&p.pos));
-    Point {
-        pos: Vec3 {
-            x: r.x,
-            y: r.y,
-            z: r.z,
-        },
-        c: p.c,
-        color: p.color,
-    }
-}
-
-fn rotate_z(points: &[Point], a: f32) -> Vec<Point> {
-    points.iter().map(|x| rotate_point_z(x, a)).collect()
-}
-
-fn translate_point_x(p: &Point, x: f32, y: f32, z: f32) -> Point {
-    let m = get_trasl_mat4(x, y, z);
-    let r = mul_mv4(&m, &to_v4(&p.pos));
-    Point {
-        pos: Vec3 {
-            x: r.x,
-            y: r.y,
-            z: r.z,
-        },
-        c: p.c,
-        color: p.color,
-    }
-}
-
-fn translate(points: &[Point], x: f32, y: f32, z: f32) -> Vec<Point> {
-    points
-        .iter()
-        .map(|p| translate_point_x(p, x, y, z))
-        .collect()
 }
 
 struct Cube {
@@ -363,13 +347,11 @@ impl Cube {
     }
 
     fn roto_transl(&self) -> Vec<Point> {
-        let c_x = rotate_x(&self.points, self.a.x);
-        let c_z = rotate_z(&c_x, self.a.z);
-        let r = rotate_y(&c_z, self.a.y);
-        let t = translate(&r, self.pos.x, self.pos.y, self.pos.z);
-        // TODO: since we don't have a view matrix we just translate
-        // the cubes way back in world coordinates
-        translate(&t, 0.0, 0.0, -50.0)
+        let w = get_world_m(&self.a, &self.pos);
+        let v = get_view_matrix(&CAMERA_ANGLE, &CAMERA_POS);
+        let vw = mul_mm4(&v, &w);
+        // TODO: stop copying from v3 to v4
+        return self.points.iter().map(|p| apply(&vw, p)).collect();
     }
 }
 
