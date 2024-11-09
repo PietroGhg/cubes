@@ -18,7 +18,7 @@ struct Vec4 {
 
 #[derive(PartialEq, PartialOrd, Debug)]
 struct Point {
-    pos: Vec3,
+    pos: Vec4,
     c: char,
     color: &'static str,
 }
@@ -78,9 +78,9 @@ fn mul_mv4(m: &Mat4, v: &Vec4) -> Vec4 {
 }
 
 fn apply(m: &Mat4, p: &Point) -> Point {
-    let newpos = mul_mv4(m, &to_v4(&p.pos));
+    let newpos = mul_mv4(m, &p.pos);
     Point {
-        pos: to_v3(&newpos),
+        pos: newpos,
         c: p.c,
         color: p.color,
     }
@@ -152,23 +152,6 @@ fn dist(p1: &Vec3, p2: &Vec3) -> f32 {
     f32::sqrt(f32::powi(p1.x - p2.x, 2) + f32::powi(p1.y - p2.y, 2) + f32::powi(p1.z - p2.z, 2))
 }
 
-fn to_v4(v: &Vec3) -> Vec4 {
-    Vec4 {
-        x: v.x,
-        y: v.y,
-        z: v.z,
-        w: 1.0,
-    }
-}
-
-fn to_v3(v: &Vec4) -> Vec3 {
-    Vec3 {
-        x: v.x,
-        y: v.y,
-        z: v.z,
-    }
-}
-
 struct Cube {
     l: f32,
     pos: Vec3,
@@ -196,10 +179,11 @@ impl Cube {
         for i in -(l as i32) / 2..(l as i32 / 2) {
             for j in -(l as i32) / 2..(l as i32 / 2) {
                 res.push(Point {
-                    pos: Vec3 {
+                    pos: Vec4 {
                         x: i as f32,
                         y: j as f32,
                         z: l as f32 / 2.0,
+                        w: 1.0,
                     },
                     c: '.',
                     color: colors[0],
@@ -210,10 +194,11 @@ impl Cube {
         for i in -(l as i32) / 2..(l as i32 / 2) {
             for j in -(l as i32) / 2..(l as i32 / 2) {
                 res.push(Point {
-                    pos: Vec3 {
+                    pos: Vec4 {
                         x: i as f32,
                         y: j as f32,
                         z: -(l as f32) / 2.0,
+                        w: 1.0,
                     },
                     c: '$',
                     color: colors[1],
@@ -225,10 +210,11 @@ impl Cube {
         for i in -(l as i32) / 2..(l as i32 / 2) {
             for j in -(l as i32) / 2..(l as i32 / 2) {
                 res.push(Point {
-                    pos: Vec3 {
+                    pos: Vec4 {
                         x: l as f32 / 2.0,
                         y: j as f32,
                         z: i as f32,
+                        w: 1.0,
                     },
                     c: '^',
                     color: colors[2],
@@ -239,10 +225,11 @@ impl Cube {
         for i in -(l as i32) / 2..(l as i32 / 2) {
             for j in -(l as i32) / 2..(l as i32 / 2) {
                 res.push(Point {
-                    pos: Vec3 {
+                    pos: Vec4 {
                         x: -(l as f32) / 2.0,
                         y: j as f32,
                         z: i as f32,
+                        w: 1.0,
                     },
                     c: '~',
                     color: colors[3],
@@ -253,10 +240,11 @@ impl Cube {
         for i in -(l as i32) / 2..(l as i32 / 2) {
             for j in -(l as i32) / 2..(l as i32 / 2) {
                 res.push(Point {
-                    pos: Vec3 {
+                    pos: Vec4 {
                         x: j as f32,
                         y: l as f32 / 2.0,
                         z: i as f32,
+                        w: 1.0,
                     },
                     c: '#',
                     color: colors[4],
@@ -267,10 +255,11 @@ impl Cube {
         for i in -(l as i32) / 2..(l as i32 / 2) {
             for j in -(l as i32) / 2..(l as i32 / 2) {
                 res.push(Point {
-                    pos: Vec3 {
+                    pos: Vec4 {
                         x: j as f32,
                         y: -(l as f32) / 2.0,
                         z: i as f32,
+                        w: 1.0,
                     },
                     c: '!',
                     color: colors[5],
@@ -350,7 +339,6 @@ impl Cube {
         let w = get_world_m(&self.a, &self.pos);
         let v = get_view_matrix(&CAMERA_ANGLE, &CAMERA_POS);
         let vw = mul_mm4(&v, &w);
-        // TODO: stop copying from v3 to v4
         return self.points.iter().map(|p| apply(&vw, p)).collect();
     }
 }
@@ -370,10 +358,11 @@ fn display(points: &mut [Point], with_color: bool) {
             let fx = p.pos.z * 0.05;
             let fy = p.pos.z * 0.04;
             Point {
-                pos: Vec3 {
+                pos: Vec4 {
                     x: p.pos.x / fx,
                     y: p.pos.y / fy,
                     z: p.pos.z,
+                    w: 1.0,
                 },
                 c: p.c,
                 color: p.color,
