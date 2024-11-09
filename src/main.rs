@@ -1,3 +1,4 @@
+use clap::Parser;
 use rand::Rng;
 use std::time::Instant;
 
@@ -137,26 +138,62 @@ fn get_view_matrix(a: &Vec3, t: &Vec3) -> Mat4 {
     mul_mm4(&rx, &mul_mm4(&ry, &mul_mm4(&rz, &t)))
 }
 
-const S_H: usize = 80;
-const S_W: usize = 200;
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Number of cubes to generate
+    #[arg(long, default_value_t = 20)]
+    ncubes: usize,
 
-const MAX_L: f32 = 100.0;
-const MIN_L: f32 = -100.0;
-const MAX_H: f32 = 50.0;
-const MIN_H: f32 = -50.0;
-const MAX_Z: f32 = 20.0;
-const MIN_Z: f32 = -20.0;
+    /// Type of projection matrix
+    #[arg(long, default_value_t=ProjT::Persp)]
+    proj: ProjT,
 
-const V: f32 = 0.08; // units of space / milliseconds
-const A: f32 = 0.01; // rad / milliseconds
-const MIN_SIZE: usize = 5;
-const MAX_SIZE: usize = 10;
+    #[arg(long, default_value_t = 80)]
+    /// Screen height
+    s_h: usize,
 
-const CAMERA_POS: Vec3 = Vec3 {
-    x: 0.0,
-    y: 0.0,
-    z: 50.0,
-};
+    #[arg(long, default_value_t = 200)]
+    /// Screen width
+    s_w: usize,
+
+    /// Print colors
+    #[arg(long, default_value_t = false)]
+    no_color: bool,
+
+    /// Camera distance from the origin
+    #[arg(long, default_value_t = 50.0)]
+    cam_dist: f32,
+
+    /// Max world width [units of space]
+    #[arg(long, default_value_t = 100.0)]
+    max_l: f32,
+
+    /// Max world height [units of space]
+    #[arg(long, default_value_t = 50.0)]
+    max_h: f32,
+
+    /// Max world depth [units of space]
+    #[arg(long, default_value_t = 20.0)]
+    max_z: f32,
+
+    /// Minimum length of the side [number of characters]
+    #[arg(long, default_value_t = 5)]
+    min_size: usize,
+
+    /// Maximum length of the side [number of characters]
+    #[arg(long, default_value_t = 10)]
+    max_size: usize,
+
+    /// Maximum speed [units of space / milliseconds]
+    #[arg(long, default_value_t = 0.08)]
+    v: f32,
+
+    /// Maximum rotation speed [radiants / milliseconds]
+    #[arg(long, default_value_t = 0.01)]
+    a: f32,
+}
+
 const CAMERA_ANGLE: Vec3 = Vec3 {
     x: 0.0,
     y: 0.0,
@@ -172,8 +209,6 @@ const YELLOW: &str = "\x1b[93m";
 const BLUE: &str = "\x1b[94m";
 const PURPLE: &str = "\x1b[95m";
 const CYAN: &str = "\x1b[96m";
-
-type BufferT = [[Buf; S_W]; S_H];
 
 fn dist(p1: &Vec3, p2: &Vec3) -> f32 {
     f32::sqrt(f32::powi(p1.x - p2.x, 2) + f32::powi(p1.y - p2.y, 2) + f32::powi(p1.z - p2.z, 2))
@@ -338,57 +373,102 @@ impl Cube {
         will_collide
     }
 
-    fn tick(&mut self, will_collide: bool) {
+    fn tick(&mut self, will_collide: bool, args: &Args) {
+        let max_l = args.max_l;
+        let max_h = args.max_h;
+        let max_z = args.max_z;
         let now = Instant::now();
         let delta_t = now.duration_since(self.time).as_millis() as f32;
         self.time = now;
         self.a.x += self.alpha.x * delta_t;
         self.a.y += self.alpha.y * delta_t;
         self.a.z += self.alpha.z * delta_t;
-        if (self.pos.x + self.v.x * delta_t).abs() > MAX_L || will_collide {
+        if (self.pos.x + self.v.x * delta_t).abs() > max_l || will_collide {
             self.v.x = -self.v.x;
         } else {
             self.pos.x += self.v.x * delta_t;
         }
-        if (self.pos.y + self.v.y * delta_t).abs() > MAX_H || will_collide {
+        if (self.pos.y + self.v.y * delta_t).abs() > max_h || will_collide {
             self.v.y = -self.v.y;
         } else {
             self.pos.y += self.v.y * delta_t;
         }
-        if (self.pos.z + self.v.z * delta_t).abs() > MAX_Z || will_collide {
+        if (self.pos.z + self.v.z * delta_t).abs() > max_z || will_collide {
             self.v.z = -self.v.z;
         } else {
             self.pos.z += self.v.z * delta_t;
         }
     }
 
-    fn roto_transl(&self) -> Vec<Point> {
+    fn roto_transl(&self, args: &Args) -> Vec<Point> {
         let w = get_world_m(&self.a, &self.pos);
-        let v = get_view_matrix(&CAMERA_ANGLE, &CAMERA_POS);
+        let v = get_view_matrix(
+            &CAMERA_ANGLE,
+            &Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: args.cam_dist,
+            },
+        );
         let vw = mul_mm4(&v, &w);
         return self.points.iter().map(|p| apply(&vw, p)).collect();
     }
 }
 
+#[derive(clap::ValueEnum, Debug, Clone, Copy)]
 enum ProjT {
-    ORTHO,
-    PERSP,
+    Ortho,
+    Persp,
 }
 
-fn display(points: &mut [Point], with_color: bool, proj_t: ProjT) {
-    let mut buf: BufferT = [[Buf {
-        c: ' ',
-        color: NEUTR,
-        z: 0.0,
-    }; S_W]; S_H];
+impl std::fmt::Display for ProjT {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match &self {
+            ProjT::Ortho => write!(f, "ortho"),
+            ProjT::Persp => write!(f, "persp"),
+        }
+    }
+}
+
+fn display(points: &mut [Point], args: &Args) {
+    let s_w = args.s_w;
+    let s_h = args.s_h;
+    let proj_t = args.proj;
+    let with_color = !args.no_color;
+
+    let mut buf = vec![
+        vec![
+            Buf {
+                c: ' ',
+                color: NEUTR,
+                z: 0.0,
+            };
+            s_w
+        ];
+        s_h
+    ];
 
     let proj_mat = match proj_t {
-        ProjT::ORTHO => get_ortho_proj(MIN_L, MAX_L, MIN_H, MAX_H, MIN_Z, MAX_Z),
-        ProjT::PERSP => get_persp_proj(MIN_L, MAX_L, MIN_H, MAX_H, MIN_Z, MAX_Z),
+        ProjT::Ortho => get_ortho_proj(
+            -args.max_l,
+            args.max_l,
+            -args.max_h,
+            args.max_h,
+            -args.max_z,
+            args.max_z,
+        ),
+        ProjT::Persp => get_persp_proj(
+            -args.max_l,
+            args.max_l,
+            -args.max_h,
+            args.max_h,
+            -args.max_z,
+            args.max_z,
+        ),
     };
     let mut projected_points: Vec<Point> = match proj_t {
-        ProjT::ORTHO => points.iter().map(|p| apply(&proj_mat, p)).collect(),
-        ProjT::PERSP => points
+        ProjT::Ortho => points.iter().map(|p| apply(&proj_mat, p)).collect(),
+        ProjT::Persp => points
             .iter()
             .map(|p| apply(&proj_mat, p))
             .map(|p| Point {
@@ -410,9 +490,9 @@ fn display(points: &mut [Point], with_color: bool, proj_t: ProjT) {
         }
         // projection matrix and clipping puts us in [-1,1], we want to go
         // in x: [0, S_W] and y: [0, S_H]
-        let x = ((p.pos.x + 1.0) * S_W as f32 / 2.0) as usize;
-        let y = ((p.pos.y + 1.0) * S_H as f32 / 2.0) as usize;
-        if x > S_W || y > S_H {
+        let x = ((p.pos.x + 1.0) * s_w as f32 / 2.0) as usize;
+        let y = ((p.pos.y + 1.0) * s_h as f32 / 2.0) as usize;
+        if x > s_w || y > s_h {
             continue;
         }
         let c = buf[y][x].c;
@@ -433,6 +513,7 @@ fn display(points: &mut [Point], with_color: bool, proj_t: ProjT) {
             s += if with_color { b.color } else { "" };
             s.push(b.c);
             s += if with_color { NEUTR } else { "" };
+            s.push(' ');
         }
         s.push('\n');
     }
@@ -442,23 +523,18 @@ fn display(points: &mut [Point], with_color: bool, proj_t: ProjT) {
 fn main() {
     let mut cubes = Vec::new();
     let mut rng = rand::thread_rng();
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        println!("Usage: cubes n");
-        return;
-    }
-    let ncubes = str::parse::<usize>(&args[1]).expect("n arg must be an unsigned int");
+    let args = Args::parse();
     let colors = [RED, GREEN, BLUE, YELLOW, CYAN, PURPLE];
-    for _ in 0..ncubes {
+    for _ in 0..args.ncubes {
         let pos = Vec3 {
-            x: rng.gen::<f32>() * MAX_L,
-            y: rng.gen::<f32>() * MAX_H,
-            z: rng.gen::<f32>() * MAX_Z,
+            x: rng.gen::<f32>() * args.max_l,
+            y: rng.gen::<f32>() * args.max_h,
+            z: rng.gen::<f32>() * args.max_z,
         };
         let v = Vec3 {
-            x: rng.gen::<f32>() * V,
-            y: rng.gen::<f32>() * V,
-            z: rng.gen::<f32>() * V,
+            x: rng.gen::<f32>() * args.v,
+            y: rng.gen::<f32>() * args.v,
+            z: rng.gen::<f32>() * args.v,
         };
         let a = Vec3 {
             x: rng.gen::<f32>(),
@@ -466,25 +542,25 @@ fn main() {
             z: rng.gen::<f32>(),
         };
         let alpha = Vec3 {
-            x: rng.gen::<f32>() * A,
-            y: rng.gen::<f32>() * A,
-            z: rng.gen::<f32>() * A,
+            x: rng.gen::<f32>() * args.a,
+            y: rng.gen::<f32>() * args.a,
+            z: rng.gen::<f32>() * args.a,
         };
         let idx: usize = rng.gen_range(0..6);
-        let l: usize = rng.gen_range(MIN_SIZE..MAX_SIZE);
+        let l: usize = rng.gen_range(args.min_size..args.max_size);
         let new_cube = Cube::new(colors[idx], l, pos, v, a, alpha);
         if !new_cube.will_collide(&cubes) {
-            // TODO: try generating another one?
+            // TODO: try generating another one? Or just don't generate random positions
             cubes.push(new_cube);
         }
     }
     loop {
         print!("{}[2J", 27 as char);
-        let mut pts: Vec<Point> = cubes.iter().flat_map(|c| c.roto_transl()).collect();
-        display(&mut pts, true, ProjT::PERSP);
+        let mut pts: Vec<Point> = cubes.iter().flat_map(|c| c.roto_transl(&args)).collect();
+        display(&mut pts, &args);
         let collisions: Vec<bool> = cubes.iter().map(|c| c.will_collide(&cubes)).collect();
         for (c, will_collide) in std::iter::zip(cubes.iter_mut(), collisions) {
-            c.tick(will_collide);
+            c.tick(will_collide, &args);
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
