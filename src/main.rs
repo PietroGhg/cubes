@@ -32,6 +32,26 @@ struct Buf {
 
 type Mat4 = [[f32; 4]; 4];
 
+// No "small stuff far away"
+fn get_ortho_proj(l: f32, r: f32, b: f32, t: f32, f: f32, n: f32) -> Mat4 {
+    [
+        [2.0 / (r - l), 0.0, 0.0, -(r + l) / (r - l)],
+        [0.0, 2.0 / (t - b), 0.0, -(t + b) / (t - b)],
+        [0.0, 0.0, -2.0 / (f - n), -(f + n) / (f - n)],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+// Far away stuff appears small
+fn get_persp_proj(l: f32, r: f32, b: f32, t: f32, f: f32, n: f32) -> Mat4 {
+    [
+        [2.0 * n / (r - l), 0.0, (r + l) / (r - l), 0.0],
+        [0.0, 2.0 * n / (t - b), (t + b) / (t - b), 0.0],
+        [0.0, 0.0, -(f + n) / (f - n), 2.0 * f * n / (f - n)],
+        [0.0, 0.0, -1.0, 0.0],
+    ]
+}
+
 fn get_rotate_x_mat4(a: f32) -> Mat4 {
     [
         [1.0, 0.0, 0.0, 0.0],
@@ -119,11 +139,18 @@ fn get_view_matrix(a: &Vec3, t: &Vec3) -> Mat4 {
 
 const S_H: usize = 80;
 const S_W: usize = 200;
-const MAX_L: f32 = S_W as f32 / 2.0;
-const MAX_H: f32 = S_H as f32 / 2.0;
+
+const MAX_L: f32 = 100.0;
+const MIN_L: f32 = -100.0;
+const MAX_H: f32 = 50.0;
+const MIN_H: f32 = -50.0;
 const MAX_Z: f32 = 20.0;
+const MIN_Z: f32 = -20.0;
+
 const V: f32 = 0.08; // units of space / milliseconds
 const A: f32 = 0.01; // rad / milliseconds
+const MIN_SIZE: usize = 5;
+const MAX_SIZE: usize = 10;
 
 const CAMERA_POS: Vec3 = Vec3 {
     x: 0.0,
@@ -343,37 +370,49 @@ impl Cube {
     }
 }
 
-fn display(points: &mut [Point], with_color: bool) {
+enum ProjT {
+    ORTHO,
+    PERSP,
+}
+
+fn display(points: &mut [Point], with_color: bool, proj_t: ProjT) {
     let mut buf: BufferT = [[Buf {
         c: ' ',
         color: NEUTR,
         z: 0.0,
     }; S_W]; S_H];
 
-    // TODO: since we don't have a projection matrix we just divide x and y
-    // by a factor * z to simulate perspective
-    let mut projected_points: Vec<Point> = points
-        .iter()
-        .map(|p| {
-            let fx = p.pos.z * 0.05;
-            let fy = p.pos.z * 0.04;
-            Point {
+    let proj_mat = match proj_t {
+        ProjT::ORTHO => get_ortho_proj(MIN_L, MAX_L, MIN_H, MAX_H, MIN_Z, MAX_Z),
+        ProjT::PERSP => get_persp_proj(MIN_L, MAX_L, MIN_H, MAX_H, MIN_Z, MAX_Z),
+    };
+    let mut projected_points: Vec<Point> = match proj_t {
+        ProjT::ORTHO => points.iter().map(|p| apply(&proj_mat, p)).collect(),
+        ProjT::PERSP => points
+            .iter()
+            .map(|p| apply(&proj_mat, p))
+            .map(|p| Point {
                 pos: Vec4 {
-                    x: p.pos.x / fx,
-                    y: p.pos.y / fy,
-                    z: p.pos.z,
-                    w: 1.0,
+                    x: p.pos.x / p.pos.w,
+                    y: p.pos.y / p.pos.w,
+                    z: p.pos.z / p.pos.w,
+                    w: p.pos.w,
                 },
                 c: p.c,
                 color: p.color,
-            }
-        })
-        .collect();
+            })
+            .collect(),
+    };
     projected_points.sort_by(|p1, p2| p1.partial_cmp(p2).unwrap());
     for p in projected_points {
-        let x = (p.pos.x + S_W as f32 / 2.0) as usize;
-        let y = (-p.pos.y + S_H as f32 / 2.0) as usize;
-        if x >= S_W || y >= S_H {
+        if f32::abs(p.pos.x) > 1.0 || f32::abs(p.pos.y) > 1.0 {
+            continue;
+        }
+        // projection matrix and clipping puts us in [-1,1], we want to go
+        // in x: [0, S_W] and y: [0, S_H]
+        let x = ((p.pos.x + 1.0) * S_W as f32 / 2.0) as usize;
+        let y = ((p.pos.y + 1.0) * S_H as f32 / 2.0) as usize;
+        if x > S_W || y > S_H {
             continue;
         }
         let c = buf[y][x].c;
@@ -432,7 +471,7 @@ fn main() {
             z: rng.gen::<f32>() * A,
         };
         let idx: usize = rng.gen_range(0..6);
-        let l: usize = rng.gen_range(5..10);
+        let l: usize = rng.gen_range(MIN_SIZE..MAX_SIZE);
         let new_cube = Cube::new(colors[idx], l, pos, v, a, alpha);
         if !new_cube.will_collide(&cubes) {
             // TODO: try generating another one?
@@ -442,7 +481,7 @@ fn main() {
     loop {
         print!("{}[2J", 27 as char);
         let mut pts: Vec<Point> = cubes.iter().flat_map(|c| c.roto_transl()).collect();
-        display(&mut pts, true);
+        display(&mut pts, true, ProjT::PERSP);
         let collisions: Vec<bool> = cubes.iter().map(|c| c.will_collide(&cubes)).collect();
         for (c, will_collide) in std::iter::zip(cubes.iter_mut(), collisions) {
             c.tick(will_collide);
